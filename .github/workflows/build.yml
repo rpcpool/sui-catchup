@@ -1,4 +1,4 @@
-name: Publish release candidate build artifact for sui exporter
+name: Publish release candidate build artifact for sui catchup
 
 on:
   push:

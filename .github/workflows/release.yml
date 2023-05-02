@@ -1,4 +1,4 @@
-name: Release sui-exporter
+name: Release sui-catchup
 
 on:
   push:
