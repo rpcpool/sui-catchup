@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	validator_addr  = flag.String("addr", "http://localhost:9187/metrics", "Validator metrics address")
+	validator_addr  = flag.String("addr", "http://localhost:9184/metrics", "Validator metrics address")
 	update_interval = flag.Int("interval", 1, "How often to check in seconds")
 
 	metric_channel chan *dto.MetricFamily = make(chan *dto.MetricFamily, 2)
