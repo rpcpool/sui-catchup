@@ -1,0 +1,43 @@
+# .goreleaser.yaml for rpcpool/sui-catchup
+#
+# This file is committed to the root of the sui-catchup source repo and is
+# consumed by Binaries-ci (https://github.com/rpcpool/Binaries-ci) when a
+# build is dispatched there for (org=rpcpool, repo=sui-catchup, tag=vX.Y.Z).
+# Signing, GCS upload, and the Slack #releases announce are injected via
+# ci/goreleaser-patch.yaml in Binaries-ci at build time — do not add `signs:`,
+# `blobs:`, or `announce:` blocks here.
+#
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+
+version: 2
+
+before:
+    hooks:
+        - go mod tidy
+
+builds:
+    - id: sui-catchup
+      main: ./cmd/sui-catchup
+      binary: sui-catchup
+      env:
+          - CGO_ENABLED=0
+      ldflags:
+          - -s -w
+      goos:
+          - linux
+      goarch:
+          - amd64
+
+archives:
+    - id: sui-catchup
+      ids: [sui-catchup]
+      name_template: sui-catchup-linux-amd64
+      formats: [binary]
+
+release:
+    header: |
+        go {{ .Env.GO_VERSION }}
+
+changelog:
+    sort: asc
+    use: github
