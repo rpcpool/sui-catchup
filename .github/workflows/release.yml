@@ -7,7 +7,9 @@ on:
 
 jobs:
   build:
-    runs-on: [ubuntu-20.04]
+    runs-on:
+      group: Public
+      labels: [self-hosted, rpcpool, public]
 
     steps:
       - name: checkout repo
