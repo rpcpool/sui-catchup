@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gosuri/uilive"
@@ -131,17 +134,70 @@ func monitorChannel(writer *uilive.Writer) {
 	}
 }
 
+// checkpointMetrics are the only metric families sui-catchup reads from the node.
+var checkpointMetrics = []string{"highest_known_checkpoint", "highest_synced_checkpoint"}
+
 func parseReader(in io.Reader, ch chan<- *dto.MetricFamily) error {
+	filtered, err := filterMetricLines(in, checkpointMetrics)
+	if err != nil {
+		return fmt.Errorf("reading metrics failed: %v", err)
+	}
 	var parser expfmt.TextParser
-	metricFamilies, err := parser.TextToMetricFamilies(in)
+	metricFamilies, err := parser.TextToMetricFamilies(filtered)
 	if err != nil {
 		return fmt.Errorf("reading text format failed: %v", err)
 	}
+	for _, name := range checkpointMetrics {
+		if len(metricFamilies[name].GetMetric()) == 0 {
+			return fmt.Errorf("metric %s not found", name)
+		}
+	}
 
-	ch <- metricFamilies["highest_known_checkpoint"]
-	ch <- metricFamilies["highest_synced_checkpoint"]
+	for _, name := range checkpointMetrics {
+		ch <- metricFamilies[name]
+	}
 
 	return nil
+}
+
+// filterMetricLines keeps the HELP, TYPE and sample lines of the named families.
+// Sui with Tidehunter repeats families such as db_op, which the strict text parser rejects.
+func filterMetricLines(in io.Reader, names []string) (io.Reader, error) {
+	keep := make(map[string]bool, len(names))
+	for _, name := range names {
+		keep[name] = true
+	}
+
+	var out bytes.Buffer
+	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if keep[metricLineName(line)] {
+			out.WriteString(line)
+			out.WriteByte('\n')
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// metricLineName returns the metric family a text exposition line belongs to.
+func metricLineName(line string) string {
+	line = strings.TrimLeft(line, " \t")
+	if strings.HasPrefix(line, "#") {
+		fields := strings.Fields(line)
+		if len(fields) >= 3 && (fields[1] == "HELP" || fields[1] == "TYPE") {
+			return fields[2]
+		}
+		return ""
+	}
+	if end := strings.IndexAny(line, "{ \t"); end >= 0 {
+		return line[:end]
+	}
+	return line
 }
 
 func parseResponse(resp *http.Response, ch chan<- *dto.MetricFamily) error {
